@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const ChatComponent = ({ socket, roomCode, username, isTurn }) => {
+const ChatComponent = ({ socket, roomCode, username, isTurn, currentMovie }) => {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
 
@@ -8,12 +8,21 @@ const ChatComponent = ({ socket, roomCode, username, isTurn }) => {
     // Escuchar los mensajes recibidos
     socket.on('newMessage', (data) => {
       setMessages((prevMessages) => [...prevMessages, data]);
+
+      // Verificar si el mensaje coincide con la película actual
+      if (
+        currentMovie &&
+        data.message.toLowerCase().trim() === currentMovie.Title.toLowerCase().trim()
+      ) {
+        // Emitir evento al servidor si alguien adivinó correctamente
+        socket.emit('correctGuess', { roomCode, username: data.username });
+      }
     });
 
     return () => {
       socket.off('newMessage');
     };
-  }, [socket]);
+  }, [socket, currentMovie]);
 
   // Manejar el envío de mensajes
   const handleSendMessage = () => {

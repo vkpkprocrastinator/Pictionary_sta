@@ -30,6 +30,7 @@ function App() {
   const [selectedMovie, setSelectedMovie] = useState(null); // Película seleccionada
   const [loadingMovies, setLoadingMovies] = useState(false); // Estado de carga de películas
   const [error, setError] = useState(''); // Estado de errores
+  const [points, setPoints] = useState({}); // Puntos de los jugadores
 
   useEffect(() => {
     socket.on('actualizarDibujo', (data) => {
@@ -55,16 +56,31 @@ function App() {
       setDibujo([]);
     });
 
+    socket.on('updatePoints', ({ points }) => {
+      setPoints(points);
+    });
+
     return () => {
       socket.off('actualizarDibujo');
       socket.off('historialDibujo');
       socket.off('readyToPlay');
       socket.off('waitingForPlayers');
       socket.off('limpiarPizarra');
+      socket.off('updatePoints');
     };
   }, []);
 
-  // Manejar el dibujo en Canvas
+  useEffect(() => {
+    socket.on('playerGuessed', ({ username, movie, points }) => {
+      alert(`${username} adivinó correctamente la película: ${movie}`);
+      setPoints(points);
+    });
+
+    return () => {
+      socket.off('playerGuessed');
+    };
+  }, []);
+
   const handleDibujo = (data) => {
     if (data.limpiar) {
       socket.emit('limpiarPizarra', { roomCode });
@@ -73,7 +89,6 @@ function App() {
     }
   };
 
-  // Unirse a un juego existente
   const joinGame = (username, roomCode) => {
     setUsername(username);
     setRoomCode(roomCode);
@@ -81,17 +96,15 @@ function App() {
     socket.emit('joinRoom', roomCode, username);
   };
 
-  // Crear una nueva partida
   const createGame = async (username) => {
     const newRoomCode = generateRoomCode();
     setUsername(username);
     setRoomCode(newRoomCode);
     setIsInGame(true);
     socket.emit('joinRoom', newRoomCode, username);
-    await fetchMovies(); // Obtener películas al crear una nueva sala
+    await fetchMovies();
   };
 
-  // Obtener películas al azar desde la API de OMDb
   const fetchMovies = async () => {
     setLoadingMovies(true);
     setError('');
@@ -99,7 +112,6 @@ function App() {
     const randomKeyword = keywords[Math.floor(Math.random() * keywords.length)];
     const apiUrl = `https://www.omdbapi.com/?apikey=${API_KEY}&s=${randomKeyword}&type=movie`;
 
-    console.log('Probando con palabra clave:', randomKeyword);
     try {
       const response = await fetch(apiUrl);
       const data = await response.json();
@@ -120,13 +132,11 @@ function App() {
     }
   };
 
-  // Manejar la selección de una película
   const handleSelectMovie = (movie) => {
     setSelectedMovie(movie);
     socket.emit('startDrawing', { roomCode, movie });
   };
 
-  // Salir de la sala
   const leaveGame = () => {
     setIsInGame(false);
     setRoomCode('');
@@ -145,6 +155,14 @@ function App() {
         <div style={{ display: 'flex', flexDirection: 'row' }}>
           <div style={{ flex: 2 }}>
             <h1>Partida en Sala: {roomCode}</h1>
+            <h2>Puntajes:</h2>
+            <ul>
+              {Object.entries(points).map(([player, score]) => (
+                <li key={player}>
+                  {player}: {score} puntos
+                </li>
+              ))}
+            </ul>
             {waitingForPlayers ? (
               <div>Esperando a más jugadores...</div>
             ) : (
@@ -152,36 +170,34 @@ function App() {
                 <h2>Turno de: {currentTurn}</h2>
                 {currentTurn === username && !selectedMovie ? (
                   <div>
-                  <h2>Selecciona una película para dibujar:</h2>
-                  {loadingMovies ? (
-                    <p>Cargando películas...</p>
-                  ) : error ? (
-                    <p style={{ color: 'red' }}>{error}</p>
-                  ) : (
-                    <div>
-                      <ul>
-                        {movies.map((movie, index) => (
-                          <li
-                            key={index}
-                            onClick={() => handleSelectMovie(movie)}
-                            style={{
-                              cursor: 'pointer',
-                              fontWeight: selectedMovie?.Title === movie.Title ? 'bold' : 'normal',
-                              color: selectedMovie?.Title === movie.Title ? 'blue' : 'black',
-                            }}
-                          >
-                            {movie.Title} ({movie.Year})
-                          </li>
-                        ))}
-                      </ul>
-                      {/* Botón para refrescar las películas */}
-                      <button onClick={fetchMovies} style={{ marginTop: '10px' }}>
-                        Refrescar películas
-                      </button>
-                    </div>
-                  )}
-                </div>
-                
+                    <h2>Selecciona una película para dibujar:</h2>
+                    {loadingMovies ? (
+                      <p>Cargando películas...</p>
+                    ) : error ? (
+                      <p style={{ color: 'red' }}>{error}</p>
+                    ) : (
+                      <div>
+                        <ul>
+                          {movies.map((movie, index) => (
+                            <li
+                              key={index}
+                              onClick={() => handleSelectMovie(movie)}
+                              style={{
+                                cursor: 'pointer',
+                                fontWeight: selectedMovie?.Title === movie.Title ? 'bold' : 'normal',
+                                color: selectedMovie?.Title === movie.Title ? 'blue' : 'black',
+                              }}
+                            >
+                              {movie.Title} ({movie.Year})
+                            </li>
+                          ))}
+                        </ul>
+                        <button onClick={fetchMovies} style={{ marginTop: '10px' }}>
+                          Refrescar películas
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <>
                     {selectedMovie && (
